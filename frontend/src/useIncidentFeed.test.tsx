@@ -48,6 +48,7 @@ class MockWebSocket {
 const update = (updateId: string, sequence: number) => ({
   updateId,
   roomId: 'incident-001',
+  clientId: 'A',
   content: `update ${sequence}`,
   createdAt: '2026-09-18T11:30:00Z',
   sequence,

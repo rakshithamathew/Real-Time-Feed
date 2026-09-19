@@ -24,11 +24,11 @@ class IncidentFeedService:
         self.broadcaster = broadcaster
         self.coordinator = coordinator
 
-    async def publish_update(self, room_id: str, content: str) -> UpdateResponse:
+    async def publish_update(self, room_id: str, client_id: str, content: str) -> UpdateResponse:
         async with self.coordinator.serialize(room_id):
             try:
                 async with self.session.begin():
-                    update = await self.repository.create_update(room_id, content)
+                    update = await self.repository.create_update(room_id, client_id, content)
                     accepted = UpdateResponse.model_validate(update)
             except SQLAlchemyError as exc:
                 raise FeedUnavailableError from exc

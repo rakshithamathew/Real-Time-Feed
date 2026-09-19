@@ -11,7 +11,7 @@ $env:VITE_BACKEND_TARGET = 'http://127.0.0.1:8001'
 npm.cmd run dev -- --host 127.0.0.1 --port 5174
 ```
 
-The normal defaults remain ports 8000 and 5173.
+The normal defaults remain ports 8001 and 5173.
 
 ## Two-client walkthrough
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { expect, test, vi } from 'vitest';
 import App from './App';
 
@@ -19,7 +19,6 @@ vi.mock('./useIncidentFeed', () => ({
 }));
 
 test('renders the feed and labeled demo controls', () => {
-  const openWindow = vi.spyOn(window, 'open').mockImplementation(() => null);
   render(<App />);
   expect(
     screen.getByRole('heading', {
@@ -27,18 +26,14 @@ test('renders the feed and labeled demo controls', () => {
     }),
   ).toBeInTheDocument();
   expect(screen.getByText('connected')).toBeInTheDocument();
-  expect(screen.getAllByText('incident-001')).toHaveLength(2);
+  expect(screen.getByDisplayValue('incident-001')).toBeInTheDocument();
+  expect(screen.getByText('incident-001')).toBeInTheDocument();
   expect(screen.getByText('Last sequence')).toBeInTheDocument();
   expect(screen.getByText('Reconnect attempt')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Open Client B' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Open Client B' }));
-  expect(openWindow).toHaveBeenCalledWith(
-    expect.objectContaining({
-      search: expect.stringContaining('client=B'),
-    }),
-    'incident-feed-client-b',
-    expect.stringContaining('width=760'),
-  );
+  const clientBLink = screen.getByRole('link', { name: 'Open Client B' });
+  expect(clientBLink).toHaveAttribute('target', '_blank');
+  expect(clientBLink).toHaveAttribute('href', expect.stringContaining('client=B'));
+  expect(clientBLink).toHaveAttribute('href', expect.stringContaining('room=incident-001'));
   expect(screen.getByRole('region', { name: 'Demo controls' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Simulate outage' })).toBeInTheDocument();
 });

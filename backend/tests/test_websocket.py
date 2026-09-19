@@ -20,8 +20,13 @@ def client() -> Iterator[TestClient]:
         yield test_client
 
 
-def publish(client: TestClient, room: str, content: str) -> dict[str, object]:
-    response = client.post(f"/api/rooms/{room}/updates", json={"content": content})
+def publish(
+    client: TestClient, room: str, content: str, client_id: str = "A"
+) -> dict[str, object]:
+    response = client.post(
+        f"/api/rooms/{room}/updates",
+        json={"content": content, "clientId": client_id},
+    )
     assert response.status_code == 201
     return response.json()
 
@@ -38,7 +43,8 @@ def test_rest_publish_reaches_another_live_client_in_the_same_room(client: TestC
         client.websocket_connect(f"/ws/rooms/{room}?after=0") as client_a,
         client.websocket_connect(f"/ws/rooms/{room}?after=0") as client_b,
     ):
-        accepted = publish(client, room, "live update")
+        accepted = publish(client, room, "live update", "B")
+        assert accepted["clientId"] == "B"
         assert receive_update(client_a) == accepted
         assert receive_update(client_b) == accepted
 

@@ -9,6 +9,7 @@ export type ConnectionStatus =
 export interface IncidentUpdate {
   updateId: string;
   roomId: string;
+  clientId: string;
   content: string;
   createdAt: string;
   sequence: number;
@@ -37,6 +38,7 @@ function isIncidentUpdate(value: unknown): value is IncidentUpdate {
   return (
     typeof candidate.updateId === 'string' &&
     typeof candidate.roomId === 'string' &&
+    typeof candidate.clientId === 'string' &&
     typeof candidate.content === 'string' &&
     typeof candidate.createdAt === 'string' &&
     typeof candidate.sequence === 'number' &&

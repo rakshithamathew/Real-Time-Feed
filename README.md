@@ -50,7 +50,7 @@ cd backend
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 .\.venv\Scripts\python.exe -m alembic upgrade head
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
 In a second terminal:
@@ -62,7 +62,7 @@ npm run dev
 ```
 
 Open <http://localhost:5173>. Vite proxies `/api`, `/health`, and `/ws` to
-`http://127.0.0.1:8000`. API docs are at <http://127.0.0.1:8000/docs>.
+`http://127.0.0.1:8001`. API docs are at <http://127.0.0.1:8001/docs>.
 
 ## Environment variables
 
@@ -93,7 +93,7 @@ python -m alembic downgrade -1
 ```
 
 Run the backend with `python -m uvicorn app.main:app --reload --host 127.0.0.1
---port 8000`. Run the frontend from `frontend/` with `npm run dev`; use
+--port 8001`. Run the frontend from `frontend/` with `npm run dev`; use
 `npm run build` for a type-check plus production build and `npm run preview` to
 serve that build. Stop PostgreSQL with `docker compose down` (add `--volumes` to
 delete its local data).
@@ -107,13 +107,13 @@ the PostgreSQL-assigned `sequence`, then commits before broadcasting:
 POST /api/rooms/incident-001/updates
 Content-Type: application/json
 
-{"content":"Investigating elevated error rate"}
+{"content":"Investigating elevated error rate","clientId":"A"}
 ```
 
 The `201` response has this shape:
 
 ```json
-{"sequence":42,"updateId":"76e944c2-3be1-4fab-b265-ce180024e27f","roomId":"incident-001","content":"Investigating elevated error rate","createdAt":"2026-09-18T11:30:00+00:00"}
+{"sequence":42,"updateId":"76e944c2-3be1-4fab-b265-ce180024e27f","roomId":"incident-001","clientId":"A","content":"Investigating elevated error rate","createdAt":"2026-09-18T11:30:00+00:00"}
 ```
 
 Recover over REST with an exclusive cursor:
@@ -132,7 +132,7 @@ ws://localhost:5173/ws/rooms/incident-001?after=41
 Each WebSocket message is:
 
 ```json
-{"type":"update","data":{"updateId":"76e944c2-3be1-4fab-b265-ce180024e27f","roomId":"incident-001","content":"Investigating elevated error rate","createdAt":"2026-09-18T11:30:00+00:00","sequence":42}}
+{"type":"update","data":{"updateId":"76e944c2-3be1-4fab-b265-ce180024e27f","roomId":"incident-001","clientId":"A","content":"Investigating elevated error rate","createdAt":"2026-09-18T11:30:00+00:00","sequence":42}}
 ```
 
 The client reconnects with the highest sequence it successfully processed.

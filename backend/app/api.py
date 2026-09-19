@@ -48,7 +48,7 @@ async def publish_update(
     request: PublishUpdateRequest,
     service: Annotated[IncidentFeedService, Depends(get_feed_service)],
 ) -> UpdateResponse:
-    return await service.publish_update(room_id, request.content)
+    return await service.publish_update(room_id, request.client_id, request.content)
 
 
 @router.get("/rooms/{room_id}/updates", response_model=UpdatesPageResponse)

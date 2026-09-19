@@ -26,17 +26,23 @@ async def api_client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
         app.dependency_overrides.clear()
 
 
-async def publish(client: AsyncClient, room: str, content: str) -> dict[str, object]:
-    response = await client.post(f"/api/rooms/{room}/updates", json={"content": content})
+async def publish(
+    client: AsyncClient, room: str, content: str, client_id: str = "A"
+) -> dict[str, object]:
+    response = await client.post(
+        f"/api/rooms/{room}/updates",
+        json={"content": content, "clientId": client_id},
+    )
     assert response.status_code == 201
     return response.json()
 
 
 async def test_successful_publishing(api_client: AsyncClient) -> None:
     room = f"incident-{uuid4()}"
-    accepted = await publish(api_client, room, "Investigating elevated error rate")
+    accepted = await publish(api_client, room, "Investigating elevated error rate", "B")
 
     assert accepted["roomId"] == room
+    assert accepted["clientId"] == "B"
     assert accepted["content"] == "Investigating elevated error rate"
     assert isinstance(accepted["updateId"], str)
     assert isinstance(accepted["createdAt"], str)
@@ -49,7 +55,7 @@ async def test_successful_publishing(api_client: AsyncClient) -> None:
 async def test_invalid_blank_content(api_client: AsyncClient) -> None:
     response = await api_client.post(
         f"/api/rooms/incident-{uuid4()}/updates",
-        json={"content": " \t\n"},
+        json={"content": " \t\n", "clientId": "A"},
     )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
@@ -142,7 +148,7 @@ async def test_query_bounds_return_useful_validation_error(api_client: AsyncClie
 
 async def test_persistence_failure_is_sanitized() -> None:
     class UnavailableService:
-        async def publish_update(self, room_id: str, content: str) -> None:
+        async def publish_update(self, room_id: str, client_id: str, content: str) -> None:
             raise FeedUnavailableError
 
     app.dependency_overrides[get_feed_service] = UnavailableService
@@ -150,7 +156,7 @@ async def test_persistence_failure_is_sanitized() -> None:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             response = await client.post(
                 "/api/rooms/incident-001/updates",
-                json={"content": "investigating"},
+                json={"content": "investigating", "clientId": "A"},
             )
     finally:
         app.dependency_overrides.clear()

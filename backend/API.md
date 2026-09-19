@@ -10,7 +10,7 @@ live room delivery is provided by the WebSocket endpoint documented in
 POST /api/rooms/{room_id}/updates
 Content-Type: application/json
 
-{"content":"Investigating elevated error rate"}
+{"content":"Investigating elevated error rate","clientId":"A"}
 ```
 
 A valid request returns HTTP 201 after the database transaction commits:
@@ -20,6 +20,7 @@ A valid request returns HTTP 201 after the database transaction commits:
   "sequence": 42,
   "updateId": "76e944c2-3be1-4fab-b265-ce180024e27f",
   "roomId": "incident-001",
+  "clientId": "A",
   "content": "Investigating elevated error rate",
   "createdAt": "2026-09-18T11:30:00+00:00"
 }
@@ -27,8 +28,8 @@ A valid request returns HTTP 201 after the database transaction commits:
 
 The service constructs the accepted event after the insert is flushed, commits,
 and only then returns it. A later broadcaster must use that post-commit boundary.
-The body accepts only `content`; clients cannot choose UUIDs, sequences, timestamps,
-or a room different from the path.
+The body accepts `content` and the publishing `clientId`; clients cannot choose
+UUIDs, sequences, timestamps, or a room different from the path.
 
 ## Read and replay updates
 

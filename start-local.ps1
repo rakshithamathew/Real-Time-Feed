@@ -5,6 +5,7 @@ $projectDirectory = $PSScriptRoot
 $postgresDirectory = 'C:\Program Files\PostgreSQL\17\bin'
 $databaseDirectory = Join-Path $projectDirectory '.local\postgres-dev\data'
 $pythonExecutable = Join-Path $projectDirectory 'backend\.venv\Scripts\python.exe'
+$backendPort = 8001
 
 if (!(Test-Path (Join-Path $databaseDirectory 'PG_VERSION'))) {
     throw 'Local development database is missing. Follow the README setup instructions.'
@@ -32,7 +33,7 @@ try {
 
     $backendReady = $false
     try {
-        $health = Invoke-RestMethod http://127.0.0.1:8000/health -TimeoutSec 5
+        $health = Invoke-RestMethod "http://127.0.0.1:$backendPort/health" -TimeoutSec 5
         $backendReady = $health.status -eq 'ok' -and $health.database -eq 'ok'
     } catch {
         $backendReady = $false
@@ -40,7 +41,7 @@ try {
     if ($backendReady) {
         Write-Host 'Backend and database are already healthy.'
     } else {
-        & $pythonExecutable -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+        & $pythonExecutable -m uvicorn app.main:app --host 127.0.0.1 --port $backendPort
     }
 } finally {
     Pop-Location

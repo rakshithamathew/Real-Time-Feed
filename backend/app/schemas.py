@@ -5,6 +5,7 @@ from pydantic import AfterValidator, AwareDatetime, BaseModel, ConfigDict, Field
 
 MAX_CONTENT_LENGTH = 10_000
 MAX_ROOM_ID_LENGTH = 128
+MAX_CLIENT_ID_LENGTH = 32
 MAX_LIMIT = 200
 MAX_SEQUENCE = 2**63 - 1
 
@@ -22,6 +23,9 @@ RoomId = Annotated[
 Content = Annotated[
     str, Field(min_length=1, max_length=MAX_CONTENT_LENGTH), AfterValidator(reject_blank)
 ]
+ClientId = Annotated[
+    str, Field(min_length=1, max_length=MAX_CLIENT_ID_LENGTH), AfterValidator(reject_blank)
+]
 Cursor = Annotated[int, Field(strict=True, ge=0, le=MAX_SEQUENCE)]
 PageLimit = Annotated[int, Field(strict=True, ge=1, le=MAX_LIMIT)]
 
@@ -30,12 +34,14 @@ class CreateUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     room_id: RoomId
+    client_id: ClientId
     content: Content
 
 
 class PublishUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    client_id: ClientId = Field(alias="clientId")
     content: Content
 
 
@@ -56,6 +62,7 @@ class UpdateResponse(BaseModel):
     sequence: Annotated[int, Field(gt=0)]
     update_id: UUID = Field(serialization_alias="updateId")
     room_id: RoomId = Field(serialization_alias="roomId")
+    client_id: ClientId = Field(serialization_alias="clientId")
     content: Content
     created_at: AwareDatetime = Field(serialization_alias="createdAt")
 

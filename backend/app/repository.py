@@ -11,9 +11,13 @@ class UpdateRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create_update(self, room_id: str, content: str) -> IncidentUpdate:
-        data = CreateUpdateRequest(room_id=room_id, content=content)
-        update = IncidentUpdate(room_id=data.room_id, content=data.content)
+    async def create_update(self, room_id: str, client_id: str, content: str) -> IncidentUpdate:
+        data = CreateUpdateRequest(room_id=room_id, client_id=client_id, content=content)
+        update = IncidentUpdate(
+            room_id=data.room_id,
+            client_id=data.client_id,
+            content=data.content,
+        )
         self.session.add(update)
         await self.session.flush()
         return update

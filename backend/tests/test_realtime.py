@@ -13,6 +13,7 @@ def update(room_id: str, sequence: int) -> UpdateResponse:
         sequence=sequence,
         update_id=uuid4(),
         room_id=room_id,
+        client_id="A",
         content=f"update {sequence}",
         created_at=datetime.now(UTC),
     )

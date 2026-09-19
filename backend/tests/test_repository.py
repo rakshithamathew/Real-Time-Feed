@@ -16,10 +16,10 @@ async def test_ordering_cursor_and_room_isolation(db_session: AsyncSession) -> N
     repo = UpdateRepository(db_session)
     room = str(uuid4())
     other = room + " "
-    first = await repo.create_update(room, "first")
-    outsider = await repo.create_update(other, "other room")
-    second = await repo.create_update(room, "second")
-    third = await repo.create_update(room, "third")
+    first = await repo.create_update(room, "A", "first")
+    outsider = await repo.create_update(other, "B", "other room")
+    second = await repo.create_update(room, "B", "second")
+    third = await repo.create_update(room, "A", "third")
 
     assert first.sequence < outsider.sequence < second.sequence < third.sequence
     assert [u.sequence for u in await repo.get_updates_after(room, 0, 200)] == [
@@ -50,18 +50,19 @@ async def test_ordering_cursor_and_room_isolation(db_session: AsyncSession) -> N
 async def test_generated_fields_and_caller_transaction(db_session: AsyncSession) -> None:
     repo = UpdateRepository(db_session)
     room = str(uuid4())
-    update = await repo.create_update(room, "  preserve content  ")
+    update = await repo.create_update(room, "B", "  preserve content  ")
     response = UpdateResponse.model_validate(update)
     assert response.update_id.version == 4
     assert response.created_at.utcoffset() is not None
     assert response.sequence > 0
+    assert response.client_id == "B"
     assert response.content == "  preserve content  "
     await db_session.commit()
     db_session.expunge_all()
     stored = await repo.get_initial_updates(room, 1)
     assert stored[0].update_id == response.update_id
     assert stored[0].created_at == response.created_at
-    await repo.create_update(room, "rolled back")
+    await repo.create_update(room, "A", "rolled back")
     await db_session.rollback()
     assert len(await repo.get_initial_updates(room, 200)) == 1
 
@@ -74,7 +75,7 @@ async def test_repository_rejects_invalid_writes(
     db_session: AsyncSession, room: str, content: str
 ) -> None:
     with pytest.raises(ValidationError):
-        await UpdateRepository(db_session).create_update(room, content)
+        await UpdateRepository(db_session).create_update(room, "A", content)
 
 
 @pytest.mark.parametrize("cursor,limit", [(-1, 1), (0, 0), (0, 201)])
@@ -95,21 +96,21 @@ async def test_database_rejects_invalid_direct_inserts(
         async with db_session.begin_nested():
             await db_session.execute(
                 text(
-                    "INSERT INTO incident_updates (update_id, room_id, content) "
-                    "VALUES (:id, :room, :content)"
+                    "INSERT INTO incident_updates (update_id, room_id, client_id, content) "
+                    "VALUES (:id, :room, 'A', :content)"
                 ),
                 {"id": uuid4(), "room": room, "content": content},
             )
 
 
 async def test_database_rejects_duplicate_uuid(db_session: AsyncSession) -> None:
-    update = await UpdateRepository(db_session).create_update(str(uuid4()), "first")
+    update = await UpdateRepository(db_session).create_update(str(uuid4()), "A", "first")
     with pytest.raises(IntegrityError):
         async with db_session.begin_nested():
             await db_session.execute(
                 text(
-                    "INSERT INTO incident_updates (update_id, room_id, content) "
-                    "VALUES (:id, 'different room', 'duplicate')"
+                    "INSERT INTO incident_updates (update_id, room_id, client_id, content) "
+                    "VALUES (:id, 'different room', 'B', 'duplicate')"
                 ),
                 {"id": update.update_id},
             )

@@ -3,139 +3,109 @@ import { useIncidentFeed } from './useIncidentFeed';
 
 const initialQuery = new URLSearchParams(window.location.search);
 
+function formatTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(date);
+}
+
 export default function App() {
   const [roomId, setRoomId] = useState(initialQuery.get('room') || 'incident-001');
   const [content, setContent] = useState('');
   const [publishError, setPublishError] = useState('');
   const feed = useIncidentFeed(roomId);
   const clientLabel = initialQuery.get('client') || 'A';
-  const isDevelopment = import.meta.env.DEV;
-
-  const openSecondClient = () => {
-    const url = new URL(window.location.href);
-    url.searchParams.set('room', roomId);
-    url.searchParams.set('client', 'B');
-    window.open(
-      url,
-      'incident-feed-client-b',
-      'popup=yes,width=760,height=900,left=780,top=40',
-    );
-  };
+  const clientBUrl = new URL(window.location.href);
+  clientBUrl.searchParams.set('room', roomId);
+  clientBUrl.searchParams.set('client', 'B');
 
   const publish = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setPublishError('');
     try {
       const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/updates`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, clientId: clientLabel }),
       });
-      if (!response.ok) throw new Error('Publish failed');
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as {
+          error?: { message?: string };
+        } | null;
+        throw new Error(body?.error?.message || `Publish failed (${response.status})`);
+      }
       setContent('');
-    } catch {
-      setPublishError('Could not publish the update.');
+    } catch (error) {
+      setPublishError(
+        error instanceof Error
+          ? error.message
+          : 'Could not publish the update. Check that the API is running.',
+      );
     }
   };
 
   return (
     <main>
-      <header>
-        <span className="eyebrow">Interview demonstration</span>
-        <h1>Reconnecting Real-Time Incident Feed</h1>
-        <p>Client {clientLabel} · durable replay from PostgreSQL</p>
-      </header>
+      <div className="page-shell">
+        <header className="hero">
+          <h1>Reconnecting Real-Time Incident Feed</h1>
+          <a
+            className="secondary-button"
+            href={clientBUrl.toString()}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open Client B <span aria-hidden="true">↗</span>
+          </a>
+        </header>
 
-      {isDevelopment && (
-        <section className="demo-guide" aria-labelledby="demo-guide-title">
-          <div>
-            <span className="eyebrow">Two-client walkthrough</span>
-            <h2 id="demo-guide-title">Run the recovery scenario</h2>
+        <section className={`client-card client-card-${feed.status}`} aria-label={`Client ${clientLabel} incident feed`}>
+          <div className="client-header">
+            <div className="client-identity">
+              <span className="client-avatar">{clientLabel}</span>
+              <div>
+                <h2>Client {clientLabel}</h2>
+                <label className="room-field"><span className="sr-only">Current room</span><input aria-label="Current room" value={roomId} onChange={(event) => setRoomId(event.target.value)} /></label>
+              </div>
+            </div>
+            <div className="client-actions" role="region" aria-label="Demo controls">
+              <span className={`status status-${feed.status}`}><span className="status-dot" aria-hidden="true" />{feed.status}</span>
+              {!feed.isPaused ? (
+                <button className="secondary-button" type="button" onClick={feed.simulateOutage}>Simulate outage</button>
+              ) : (
+                <button className="secondary-button resume" type="button" onClick={feed.resumeConnection}>Resume connection</button>
+              )}
+            </div>
           </div>
-          <button type="button" onClick={openSecondClient}>Open Client B</button>
-          <ol>
-            <li>Keep both clients in <strong>incident-001</strong> and confirm Connected.</li>
-            <li>Publish from Client A and watch the update appear in Client B.</li>
-            <li>On Client B, select Simulate outage and confirm Disconnected.</li>
-            <li>Publish at least two more updates from Client A.</li>
-            <li>Resume Client B; missed updates arrive once, in sequence order.</li>
-          </ol>
+
+          <div className="metrics" aria-label="Connection status" aria-live="polite">
+            <div><span className="metric-label">Last sequence</span><strong>{feed.lastSequence}</strong></div>
+            <div><span className="metric-label">Room</span><strong>{roomId}</strong></div>
+            <div><span className="metric-label">Reconnect attempt</span><strong>{feed.retryAttempt} / {feed.maxRetries}</strong></div>
+            {feed.retriesExhausted && <button className="secondary-button" onClick={feed.retry}>Retry</button>}
+          </div>
+
+          {feed.connectionError && <p className="connection-error">{feed.connectionError}</p>}
+
         </section>
-      )}
 
-      <section className="room-controls" aria-label="Room selection">
-        <label>
-          Current room
-          <input value={roomId} onChange={(event) => setRoomId(event.target.value)} />
-        </label>
-      </section>
+        <form className="composer" onSubmit={publish}>
+          <div className="composer-heading"><span className="eyebrow">Compose update</span><span className="client-chip">Client {clientLabel}</span></div>
+          <label><span className="sr-only">Update</span><textarea aria-label="Update" value={content} onChange={(event) => setContent(event.target.value)} placeholder="Describe the current incident status, action taken, or next steps…" required /></label>
+          <div className="composer-footer"><span>room: {roomId} · next seq: {feed.lastSequence + 1}</span><button type="submit">Publish Update</button></div>
+          {publishError && <p className="publish-error" role="alert">{publishError}</p>}
+        </form>
 
-      <section className="connection" aria-label="Connection status" aria-live="polite">
-        <div>
-          <span className="metric-label">Connection</span>
-          <strong className={`status status-${feed.status}`}>{feed.status}</strong>
-        </div>
-        {isDevelopment && (
-          <>
-            <div>
-              <span className="metric-label">Room</span>
-              <strong>{roomId}</strong>
-            </div>
-            <div>
-              <span className="metric-label">Last sequence</span>
-              <strong>{feed.lastSequence}</strong>
-            </div>
-            <div>
-              <span className="metric-label">Reconnect attempt</span>
-              <strong>{feed.retryAttempt} / {feed.maxRetries}</strong>
-            </div>
-          </>
-        )}
-        {feed.status === 'reconnecting' && (
-          <span>Retry {feed.retryAttempt} of {feed.maxRetries}</span>
-        )}
-        {feed.retriesExhausted && <button onClick={feed.retry}>Retry</button>}
-        {feed.connectionError && <p className="connection-error">{feed.connectionError}</p>}
-      </section>
-
-      <section className="demo-controls" aria-label="Demo controls">
-        <strong>Demo controls</strong>
-        <p>
-          Pause this client, publish from a second tab, then resume to demonstrate replay.
-        </p>
-        {!feed.isPaused ? (
-          <button type="button" onClick={feed.simulateOutage}>
-            Simulate outage
-          </button>
-        ) : (
-          <button type="button" onClick={feed.resumeConnection}>
-            Resume connection
-          </button>
-        )}
-      </section>
-
-      <form onSubmit={publish}>
-        <label>
-          Update
-          <textarea
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-            required
-          />
-        </label>
-        <button type="submit">Publish update</button>
-        {publishError && <p role="alert">{publishError}</p>}
-      </form>
-
-      <ol aria-label="Incident updates">
-        {feed.updates.length === 0 && <li className="empty">No updates yet.</li>}
-        {feed.updates.map((update) => (
-          <li key={update.updateId}>
-            <span className="sequence">#{update.sequence}</span>
-            <span>{update.content}</span>
-          </li>
-        ))}
-      </ol>
+        <section className="data-model" aria-labelledby="model-title">
+          <span className="eyebrow" id="model-title">Update data model</span>
+          <div className="table-wrap"><table>
+            <thead><tr><th>ID (stable)</th><th>Room_id</th><th>Client</th><th>Content</th><th>Seq / Created_at</th></tr></thead>
+            <tbody>
+              {feed.updates.length === 0 ? <tr className="placeholder-row"><td>—</td><td>Waiting for update</td><td>—</td><td>—</td><td>—</td></tr> : feed.updates.map((update) => (
+                <tr key={update.updateId}><td>{update.updateId}</td><td>{update.roomId}</td><td>Client {update.clientId}</td><td title={update.content}>{update.content}</td><td>#{update.sequence} · {formatTime(update.createdAt)}</td></tr>
+              ))}
+            </tbody>
+          </table></div>
+        </section>
+      </div>
     </main>
   );
 }
