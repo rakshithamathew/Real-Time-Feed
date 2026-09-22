@@ -20,9 +20,7 @@ def client() -> Iterator[TestClient]:
         yield test_client
 
 
-def publish(
-    client: TestClient, room: str, content: str, client_id: str = "A"
-) -> dict[str, object]:
+def publish(client: TestClient, room: str, content: str, client_id: str = "A") -> dict[str, object]:
     response = client.post(
         f"/api/rooms/{room}/updates",
         json={"content": content, "clientId": client_id},

@@ -1,52 +1,86 @@
-# Interview demo
+# Demo video script (3–5 minutes)
 
-## Start the stack
+Record Chrome with both production clients visible. Upload the result to Loom,
+YouTube, Google Drive, or another publicly accessible service, verify it in an
+incognito window, and replace the pending video value in `SUBMISSION.md`.
 
-Use the commands in `README.md` to start PostgreSQL, apply migrations, and run
-FastAPI and Vite. If the default backend port is occupied, Vite supports an
-alternate development target:
+## 0:00–0:35 — Scope and architecture
+
+Open https://real-time-feed.vercel.app/ and say:
+
+> I selected Problem 1 and implemented its durable ordered reconnect protocol
+> as an incident-update feed. React owns connection state and cursor-based merge;
+> FastAPI persists through SQLAlchemy; PostgreSQL is the source of truth; and
+> WebSocket is transient low-latency delivery. The documented limitation is that
+> this version does not model assistant message/run IDs or terminal run states.
+
+Briefly show the architecture diagram in `SUBMISSION.md`.
+
+## 0:35–1:20 — Successful live path
+
+1. Wait for Client A to show **Connected**.
+2. Select **Open Client B** and arrange both Chrome windows side by side.
+3. Publish `Live verification from Client A`.
+4. Point out that both clients display the same UUID and sequence once.
+5. Explain that PostgreSQL assigns ordering and the service commits before
+   broadcasting.
+
+## 1:20–2:30 — Failure and recovery
+
+1. On Client B, select **Simulate outage**.
+2. Point out the visible **Disconnected** state and retained last sequence.
+3. Publish `Missed update one` and `Missed update two` from Client A.
+4. Select **Resume connection** on Client B.
+5. Show B returning to **Connected** with both events present once and ordered.
+6. Explain that reconnect sends `after=<lastSequence>`, the server subscribes
+   before replay, and the browser deduplicates by stable update ID.
+
+## 2:30–3:25 — Verification benchmark
+
+From `backend/`, run:
 
 ```powershell
-$env:VITE_BACKEND_TARGET = 'http://127.0.0.1:8001'
-npm.cmd run dev -- --host 127.0.0.1 --port 5174
+.\.venv\Scripts\python.exe scripts\reconnect_benchmark.py --base-url https://real-time-feed.onrender.com
 ```
 
-The normal defaults remain ports 8001 and 5173.
+Show the report and call out:
 
-## Two-client walkthrough
+- 30 expected and 30 observed events
+- zero missing events
+- zero duplicate events
+- ascending order
+- one reconnect
+- durable history matching WebSocket delivery
 
-1. Open Client A at `/?room=incident-001&client=A`.
-2. Select **Open Client B**. Arrange the two browser windows side by side.
-3. Confirm both status panels show **Connected**, room `incident-001`, cursor 0
-   (or the room's current last sequence), and reconnect attempt `0 / 8`.
-4. Publish from Client A. Confirm Client B receives the same sequence immediately.
-5. Select **Simulate outage** on Client B. Confirm it shows **Disconnected** and
-   retains its last processed sequence.
-6. Publish at least two updates from Client A. Client B remains unchanged.
-7. Select **Resume connection** on Client B. It reconnects with its stored cursor,
-   replays the missed updates, and shows one row per update in ascending sequence.
+State clearly that `finalRunState` is reported as
+`not-modeled-by-incident-feed-interpretation`; do not present that requirement
+as complete.
 
-The walkthrough, diagnostics, and second-client launcher appear only in Vite's
-development build. Production retains concise connection state and public error
-messages without debug metadata or stack traces.
+## 3:25–4:15 — Tests and trade-off
 
-## Server observability
+Show the commands/results in `SUBMISSION.md`: 50 backend tests, 10 frontend
+tests, Alembic check, Ruff, mypy, TypeScript, ESLint, and the production build.
 
-At INFO level, the server logs compact key-value events without message content:
+Explain one trade-off:
 
-```text
-event=websocket_connected room_id=incident-001 after=143
-event=websocket_replay_completed room_id=incident-001 after=143 replay_count=2
-event=incident_update_accepted room_id=incident-001 sequence=145
-event=websocket_disconnected room_id=incident-001
-```
+> I kept WebSocket membership in process and PostgreSQL as the durable log. That
+> is simple and correct for one server, but multiple servers would need a
+> transactional outbox plus shared pub/sub. I prioritized the replay contract
+> over adding distributed infrastructure to a prototype.
 
-These show connection lifecycle, recovery cursor/count, and accepted sequence.
-PostgreSQL remains the durable source of truth.
+## 4:15–4:40 — Honest limitations
 
-## Verified scenario
+End by showing the acceptance table in `SUBMISSION.md`. Mention that durable
+event history survives a service restart, while an in-progress reply generator,
+terminal `completed`/`failed` state, and explicit expired-cursor response are not
+implemented. This is the required restart/failure discussion for the current
+submission; it is a disclosed gap, not a demonstrated complete scenario.
 
-The walkthrough was exercised with two real Chrome clients against FastAPI,
-PostgreSQL 17, and Vite. Client B received sequence 143 live, paused at cursor 143,
-missed sequences 144 and 145, then resumed and displayed 143, 144, and 145 exactly
-once in ascending order. No mocked demo data was used.
+## Permission check
+
+Before submitting:
+
+1. Open the video link in a Chrome incognito window.
+2. Confirm it plays without requesting access.
+3. Open the repository and live demo while signed out.
+4. Paste the verified video URL near the top of `SUBMISSION.md`.

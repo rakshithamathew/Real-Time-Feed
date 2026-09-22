@@ -5,6 +5,12 @@ low-latency room notifications and cursor-based recovery. REST submits commands;
 WebSocket delivers transient live events; PostgreSQL remains the durable source
 of truth.
 
+> **Challenge scope:** This is an incident-feed adaptation of Problem 1's
+> resumable event-stream protocol. It does not model assistant run IDs or
+> `running`/`completed`/`failed` run states. See [SUBMISSION.md](SUBMISSION.md)
+> for the official acceptance-scenario mapping, observed benchmark results, and
+> explicitly incomplete requirements.
+
 ## Problem and architecture
 
 Clients must see incident updates quickly, survive a dropped connection, avoid
@@ -77,6 +83,9 @@ The backend loads the repository-root `.env`; exported variables take precedence
 | `POSTGRES_PORT` | Host port mapped to PostgreSQL | `5432` |
 | `DATABASE_URL` | Backend async database URL | `postgresql+asyncpg://incident_feed:incident_feed@localhost:5432/incident_feed` |
 | `TEST_DATABASE_URL` | Optional integration-test database URL | `postgresql+asyncpg://incident_feed:incident_feed@localhost:5433/incident_feed_test` |
+| `FRONTEND_ORIGIN` | Exact browser origin allowed by CORS | `http://localhost:5173` |
+| `VITE_BACKEND_URL` | Production REST/WebSocket backend origin | Empty locally; Vite uses its proxy |
+| `VITE_BACKEND_TARGET` | Optional Vite development proxy target | `http://127.0.0.1:8001` |
 
 Keep `POSTGRES_*` and `DATABASE_URL` aligned. Compose credentials initialize only
 a new volume. Do not commit `.env`.
@@ -194,6 +203,8 @@ The current connection manager assumes one FastAPI process. Multiple production
 servers are out of scope; a multi-server version would require a shared pub/sub
 layer, which is intentionally excluded. There is no authentication,
 authorization, durable event broker, heartbeat protocol, history retention policy,
-editing/deletion, attachments, or production deployment configuration. A full
-queue or slow client is disconnected with WebSocket code 1013 and recovers from
-PostgreSQL on reconnect.
+editing/deletion, or attachments. The Vercel/Render deployment is a demonstration,
+not production infrastructure. A full queue or slow client is disconnected with
+WebSocket code 1013 and recovers from PostgreSQL on reconnect. The selected
+challenge's assistant generator, stable user-message/run IDs, and terminal run
+states are not implemented; [ACCEPTANCE.md](ACCEPTANCE.md) records that gap.

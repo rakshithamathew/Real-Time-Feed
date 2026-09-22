@@ -1,45 +1,64 @@
-# Acceptance coverage
+# Acceptance coverage for Problem 1
 
-The backend acceptance tests use the real FastAPI routes, service, repository,
-Alembic-managed PostgreSQL table, and WebSocket connection manager. The browser
-tests exercise the public `useIncidentFeed` result with only the WebSocket
-transport mocked; fake timers make backoff deterministic.
+This project applies the resumable-stream protocol to an incident feed. It
+implements durable ordered events, reconnect cursors, replay/live handoff, and
+client deduplication, but it does not implement the complete assistant-run domain
+from **Problem 1: Resumable Realtime Conversation**. The table uses the official
+acceptance scenarios and labels the differences explicitly.
 
-| Criterion | Automated verification |
-| --- | --- |
-| AC1: REST publish reaches another connected client | `test_rest_publish_reaches_another_live_client_in_the_same_room` connects two sockets to one room, publishes through the real REST route, and compares both envelopes with the committed POST response. |
-| AC2: interruption is visible | `moves through connecting, connected, and reconnecting after an unexpected close`; retry exhaustion and browser offline tests also assert `disconnected`. |
-| AC3: cursor-gap recovery returns every missed update | `test_disconnect_gap_and_reconnect_replays_every_missed_update` records a live cursor, disconnects, commits three REST updates, reconnects with that cursor, and receives all three in ascending order. |
-| AC4: overlapping delivery produces one logical update | `deduplicates replay and live overlap after reconnecting` sends duplicate recovered envelopes and asserts one ID-keyed, sorted domain result. |
-| AC5: deterministic ascending order | The AC3 test asserts replay order; `test_initial_history_ordering_and_paging`, `test_ordering_cursor_and_room_isolation`, and both hook merge tests independently assert sequence ordering. |
+| Official scenario | Status | Automated or manual evidence |
+| --- | --- | --- |
+| AC1: ordered live stream and completed run | Partial | `test_rest_publish_reaches_another_live_client_in_the_same_room` verifies ordered live delivery of committed events. No reply generator or `completed` run state exists. |
+| AC2: missed-event recovery | Complete at event-stream level | `test_disconnect_gap_and_reconnect_replays_every_missed_update` records a cursor, disconnects, commits three events, reconnects, and asserts every missed event arrives once in ascending order. |
+| AC3: replay/live overlap | Complete at event-stream level | The server registers before replay and queues concurrent live events. `deduplicates replay and live overlap after reconnecting` verifies the hook's UUID merge and sequence ordering. |
+| AC4: service restart | Partial | PostgreSQL history remains replayable after restart. In-progress generator recovery/interruption is not modeled because there is no run entity. |
+| AC5: generation failure | Incomplete | Persistence failure is sanitized to `503`, and replay failure closes with `1011`; no generator or durable `failed` state exists. |
+| AC6: unknown or stale cursor | Partial | Negative/out-of-range cursors return `422`; future cursors safely return an empty page. Retention and explicit expired-cursor errors are not implemented. |
 
-Additional focused coverage includes strict cursor boundaries, reconnect URLs,
-room isolation, subscriber cleanup, slow-subscriber eviction, bounded retries,
-delayed backoff, online/offline behavior, timer cleanup, input validation, and
-database constraints.
+Additional tests cover strict cursor boundaries, initial paging, room isolation,
+stable UUIDs, database constraints, transaction behavior, disconnect cleanup,
+slow-subscriber eviction, bounded retry/backoff, offline/online transitions, and
+socket/timer cleanup.
 
-## Manual browser demonstration
+## Deterministic 30-event reconnect benchmark
 
-A physical network failure is not emulated by the in-process test transports.
-Its observable behavior is split into real server disconnect/replay tests and a
-mocked browser `close` event with retry timers. To demonstrate the complete user
-flow manually:
-
-1. Start PostgreSQL, migrate, then start FastAPI and Vite as documented in `README.md`.
-2. Open two tabs in `incident-001` and confirm a publish in tab A appears in tab B.
-3. In tab B, select **Simulate outage** and note the `disconnected` state.
-4. Publish several updates from tab A while tab B remains paused.
-5. Select **Resume connection** in tab B. It reconnects with its stored cursor,
-   merges replay by update ID, and renders the missed updates by ascending sequence.
-
-Unexpected closure uses automatic backoff; the demo outage is intentionally
-paused so this recovery sequence can be observed without racing a retry timer.
-
-## Final verification
-
-Backend, using the isolated PostgreSQL 17 database:
+With the backend running:
 
 ```powershell
+cd backend
+.\.venv\Scripts\python.exe scripts\reconnect_benchmark.py --base-url http://127.0.0.1:8001
+```
+
+The benchmark publishes ten events over a live socket, disconnects, commits ten
+events during the interruption, reconnects from the processed cursor, and then
+receives ten more live events. It compares all WebSocket deliveries with the
+durable REST history.
+
+Observed against `https://real-time-feed.onrender.com` on September 22, 2026:
+
+```text
+expectedEventCount: 30
+observedEventCount: 30
+uniqueEventCount: 30
+missingEventCount: 0
+duplicateEventCount: 0
+ordered: true
+reconnectCount: 1
+historyMatchesDeliveredEvents: true
+finalConnectionState: connected-and-current
+finalRunState: not-modeled-by-incident-feed-interpretation
+```
+
+The benchmark therefore verifies the submitted reconnect protocol, while
+explicitly not claiming the problem brief's missing assistant-run state machine.
+
+## Full verification
+
+From the repository root:
+
+```powershell
+docker compose --profile test up -d --wait postgres-test
+cd backend
 $env:TEST_DATABASE_URL = 'postgresql+asyncpg://incident_feed:incident_feed@localhost:5433/incident_feed_test'
 $env:DATABASE_URL = $env:TEST_DATABASE_URL
 $env:RUN_DB_TESTS = '1'
@@ -51,11 +70,10 @@ $env:RUN_DB_TESTS = '1'
 .\.venv\Scripts\python.exe -m mypy
 ```
 
-Result: **49 tests passed**. Alembic found no pending upgrade or model drift;
-Ruff and strict mypy passed. The only warnings are two upstream deprecation
-warnings from Starlette's current WebSocket test-client compatibility layer.
+Observed result: **50 tests passed** with two upstream deprecation warnings.
+Alembic found no pending operations; Ruff and strict mypy passed.
 
-Frontend:
+Frontend, from `frontend/`:
 
 ```powershell
 npm.cmd run typecheck
@@ -64,5 +82,5 @@ npm.cmd test
 npm.cmd run build
 ```
 
-Result: **10 tests passed** across two files. TypeScript, ESLint, and the Vite
-production build passed.
+Observed result: **10 tests passed** across two files. TypeScript, ESLint, and
+the Vite production build passed.
