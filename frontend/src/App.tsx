@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { useIncidentFeed } from './useIncidentFeed';
 
 const initialQuery = new URLSearchParams(window.location.search);
+const backendUrl = (import.meta.env.VITE_BACKEND_URL ?? '').replace(/\/+$/, '');
 
 function formatTime(value: string) {
   const date = new Date(value);
@@ -23,7 +24,7 @@ export default function App() {
     event.preventDefault();
     setPublishError('');
     try {
-      const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/updates`, {
+      const response = await fetch(`${backendUrl}/api/rooms/${encodeURIComponent(roomId)}/updates`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, clientId: clientLabel }),
       });
       if (!response.ok) {

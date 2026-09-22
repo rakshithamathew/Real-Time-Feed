@@ -58,8 +58,10 @@ function parseUpdateEnvelope(raw: string): UpdateEnvelope | null {
 }
 
 function websocketUrl(roomId: string, after: number): string {
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/ws/rooms/${encodeURIComponent(roomId)}?after=${after}`;
+  const configuredBackend = import.meta.env.VITE_BACKEND_URL?.replace(/\/+$/, '');
+  const backend = configuredBackend ? new URL(configuredBackend) : window.location;
+  const protocol = backend.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${backend.host}/ws/rooms/${encodeURIComponent(roomId)}?after=${after}`;
 }
 
 function retryDelay(attempt: number): number {
